@@ -1,4 +1,6 @@
---##내부조인과 외부조인 
+/****************************
+ * 1. 내부조인과 외부조인
+ ****************************/
 --#동등조인 (where절 등호(=)연산자 사용, pk컬럼 사용)
 select a.employee_id
      , a.emp_name
@@ -6,8 +8,9 @@ select a.employee_id
      , B.DEPARTMENT_ID
      --, a.DEPARTMENT_ID
 from EMPLOYEES a
-    , DEPARTMENTS b
-where A.DEPARTMENT_ID = B.DEPARTMENT_ID ; /*사원테이블에 부서번호가 있는건만 추출됨 
+   , DEPARTMENTS b
+where A.DEPARTMENT_ID = B.DEPARTMENT_ID ; ----> null은 제외됨  
+										/*사원테이블에 부서번호가 있는건만 추출됨 
                                         (사원테이블의 전체건수: 107, 부서번호 없는 사원: 1건 존재)
                                         즉, 106건만 추출됨
                                         */
@@ -23,56 +26,70 @@ where A.DEPARTMENT_ID = B.DEPARTMENT_ID(+) --사원테이블에 null 포함해서 조회됨
 ;
 
 select * from EMPLOYEES where EMPLOYEE_id = '178' ;
+
+
+
+-------------------------------------------------------------------------------------------------
 --#세미조인 (서브쿼리 사용해서 서브쿼리에 존재하는 데이터만 메인쿼리에서 추출, IN/EXISTS 사용)
---메인쿼리 테이블 A, 서브쿼리 테이블 B => B테이블에 존재하는 A테이블의 데이터를 추출 
---1) exists
+--메인쿼리 테이블 A, 서브쿼리 테이블 B => B테이블에 존재하는 A테이블의 데이터를 추출
+--!!! 세미조인의 가장 포인트 : 서브쿼리에 존재하는 메인쿼리 데이터가 여러건 존재하더라도 최종 반환되는 메인쿼리데이터에는 중복이 없다는점이 일반조인과의 차이점이다.  
+
+--1) exists (메인쿼리 데이터 중복없음)
 select A.DEPARTMENT_ID, A.DEPARTMENT_NAME
-from DEPARTMENTS a
-where EXISTS (select * from EMPLOYEES b
-              where a.department_id = b.department_id --조인조건
-              and b.salary > 3000              
-              )
+  from DEPARTMENTS a
+ where EXISTS (select 1 
+ 				 from EMPLOYEES b
+                where a.department_id = b.department_id --조인조건
+                  and b.salary > 3000)
 ;              
---2) in 
+--2) in (메인쿼리 데이터 중복없음)
 select department_id, department_name
-from DEPARTMENTS a
-where A.DEPARTMENT_ID in (select B.DEPARTMENT_ID 
-                          from employees b
-                          where B.SALARY > 3000 --조인조건 없음 
-                        )
+  from DEPARTMENTS a
+ where A.DEPARTMENT_ID in (select B.DEPARTMENT_ID 
+                             from employees b
+                            where B.SALARY > 3000 ) --조인조건 없음 
 ;  
 --위의 쿼리를 일반조인으로 하면 결과건수가 훨씬 많음 (중복건 발생)
 select A.DEPARTMENT_ID, A.DEPARTMENT_NAME
-from DEPARTMENTS a 
-    , EMPLOYEES b
-where a.department_id = b.department_id --조인조건
-and b.salary > 3000       
+  from DEPARTMENTS a 
+     , EMPLOYEES b
+ where a.department_id = b.department_id --조인조건
+   and b.salary > 3000       
 ;
 
 
 --조회
 select department_id, manager_id  
-from departments b
+  from departments b
 --where b.manager_id is not null
 ;    
+
 select distinct department_id, max(manager_id)
-from employees
+  from employees
 group by department_id
 order by department_id
 ;
 
 
+
+-------------------------------------------------------------------------------------------------
 --#안티조인
 --서브쿼리의 b 테이블에는 없는 메인쿼리 a 테이블의 데이터만 추출 (한쪽 테이블에만 있는 데이터 추출)
 --NOT IN / NOT EXISTS 사용
-select A.EMPLOYEE_ID, A.EMP_NAME, A.DEPARTMENT_ID, B.DEPARTMENT_NAME
-from EMPLOYEES a, DEPARTMENTS b
-where A.DEPARTMENT_ID = B.DEPARTMENT_ID
+
+--1) NOT IN 사용 : 106건 조회 ===> a.department_id 가 null이면, not in과의 연산결과가 false가 되어 제외됨. null 은 in/not in으로 비교되지않고 is null/is not null을 써야됨!!! 
+--즉, is not null 조건을 꼭 같이 추가해주자! ★★★
+select A.EMPLOYEE_ID, A.EMP_NAME, A.DEPARTMENT_ID--, B.DEPARTMENT_NAME
+from EMPLOYEES a--, DEPARTMENTS b
+where 1=1 --A.DEPARTMENT_ID = B.DEPARTMENT_ID
   and a.department_id not in (select department_id
                               from departments
                               where manager_id is null) 
 order by A.DEPARTMENT_ID,A.EMPLOYEE_ID
 ;
+--부서코드 없는대상 확인 
+select * from Employees where department_id is null ; --178
+
 
 --in/exists count 확인
 --106 --> null은 IN으로 비교가 되지않고, IS NULL로 비교 해야하기 때문.
@@ -115,11 +132,12 @@ where not exists (select 1--department_id
 ;
 
 
-    
---##셀프조인:동일한 테이블 사용
+
+-------------------------------------------------------------------------------------------------
+--##셀프조인:동일한 테이블 사용하여 조인.
 select a.employee_id, a.emp_name, b.employee_id, b.emp_name, a.department_id
-from employees a,
-    employees b
+  from employees a,
+       employees b
 where 1=1--a.employee_id < b.employee_id
   and A.DEPARTMENT_ID = B.DEPARTMENT_ID
   and A.DEPARTMENT_ID = 20
@@ -127,6 +145,41 @@ where 1=1--a.employee_id < b.employee_id
   ;
 
 select department_id, employee_id
-from EMPLOYEES
-where DEPARTMENT_ID = 20
+  from EMPLOYEES
+ where DEPARTMENT_ID = 20
 order by department_id;
+
+
+-------------------------------------------------------------------------------------------------
+--##외부조인(OUTER JOIN) :일반조인의 확장개념. 조인조건에 만족하는 데이터 뿐만 아니라, 어느 한쪽테이블에 조인조건에 명시된 컬럼에 값이 없거나(null) 해당 로우가 아예 없더라고 데이터를 모두 추출한다. 
+select * from job_history 
+;
+--1) 일반조인 
+select a.department_id, a.department_name, b.job_id, b.department_id 
+  from departments a
+	 , job_history b
+where a.department_id = b.department_id 
+;
+
+--2) 외부조인 
+select a.department_id, a.department_name, b.job_id, b.department_id 
+  from departments a
+	 , job_history b
+where a.department_id = b.department_id (+)
+;
+
+
+-------------------------------------------------------------------------------------------------
+--##카타시안 조인(CATASIAN PRODUCT): where절에 조인조건이 없는 조인을 말함. (결과는 두 테이블 건수의 곱)
+
+-------------------------------------------------------------------------------------------------
+
+
+/****************************
+ * 2. ANSI 조인
+ ****************************/
+
+
+
+
+
