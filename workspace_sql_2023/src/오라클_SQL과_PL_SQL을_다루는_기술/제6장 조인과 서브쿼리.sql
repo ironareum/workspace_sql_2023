@@ -1,5 +1,5 @@
 /****************************
- * 1. 내부조인과 외부조인
+ * 2. 내부조인과 외부조인
  ****************************/
 --#동등조인 (where절 등호(=)연산자 사용, pk컬럼 사용)
 select a.employee_id
@@ -176,10 +176,188 @@ where a.department_id = b.department_id (+)
 
 
 /****************************
- * 2. ANSI 조인
+ * 3. ANSI 조인
  ****************************/
+--ANSI 조인의 차이점은 조건이 WHERE절이 아닌 FROM 절에 들어간다는 것. 
 
 
 
 
+
+
+
+
+/****************************
+ * 4. 서브쿼리 
+ ****************************/
+--서브쿼리란 SQL문장 안에서 보조로 사용되는 또다른 select문을 의미. 
+/* 
+ * 1) select, from, where, insert, update, merge, delete문에서 사용가능. 
+ * 2) 특성과 형태에 따라 구분 
+ *    - 메인쿼리와의 연관성에 따라 : 연관성 없는(noncorrelated) 서브쿼리 vs 연관성있는 쿼리
+ *    - 형태에 따라 : 일반서브쿼리(select절), 인라인 뷰(from 절), 중첩쿼리(where절)  
+ */
+--# 연관성 없는 서브쿼리
+select count(*) from employees
+where salary >= (select avg(salary) from employees)
+;
+
+select count(*)
+from employees
+where department_id in (select department_id --10 (1건)
+						from departments
+						where parent_id is null
+						)
+;
+
+select employee_id, emp_name, job_id --2건 
+from employees 
+where (employee_id, job_id) in (select employee_id, job_id 
+								from job_history )
+;
+--검증
+select employee_id, emp_name, job_id 
+from employees 
+where employee_id in ('101',
+					'101',
+					'102',
+					'114',
+					'122',
+					'176',
+					'176',
+					'200',
+					'200',
+					'201'
+					)
+;
+								
+
+-- update문에서의 사용 
+update employees
+set salary = (select avg(salary) from employees)
+; 
+rollback; 
+
+delete employees
+where salary >= (select avg(salary) from employees )
+;
+
+/*
+ * insert into ora_user.employees
+	(EMPLOYEE_ID
+	 ,EMP_NAME
+	 ,EMAIL
+	 ,PHONE_NUMBER
+	 ,HIRE_DATE
+	 ,SALARY
+	 ,MANAGER_ID
+	 ,COMMISSION_PCT
+	 ,RETIRE_DATE
+	 ,DEPARTMENT_ID
+	 ,JOB_ID
+	 ,CREATE_DATE
+	 ,UPDATE_DATE )
+select 
+	EMPLOYEE_ID
+	,FIRST_NAME||' '||LAST_NAME
+	,EMAIL
+	,PHONE_NUMBER
+	,HIRE_DATE
+	,SALARY
+	,MANAGER_ID
+	,COMMISSION_PCT
+	,''
+	,DEPARTMENT_ID
+	,JOB_ID 
+	,SYSDATE
+	,SYSDATE
+from hr.employees
+;
+ * */
+select * from employees
+;
+
+--# 연관성이 있는 서브 쿼리 
+select a.department_id, a.department_name 
+from departments a
+where EXISTS (select 1 
+			  from job_history b
+			  where a.department_id = b.department_id ) 
+;
+
+select a.employee_id,
+	(select b.emp_name from employees b where a.employee_id = b.employee_id) as emp_name ,
+	a.department_id ,
+	(select b.department_name from departments b where a.department_id = b.department_id) as dep_name 
+from job_history a
+;
+
+
+
+-------------------------------------------------------------------------------------------------
+--# update, merge, delete 에서 사용하는 케이스 
+--부서별 평균 급여 조회 
+select department_id, avg(salary) as sal 
+from employees a
+where department_id in (select department_id from departments where parent_id = 90)
+group by department_id 
+;
+/*          60                                      5760
+            70                                     10000
+           100 8601.333333333333333333333333333333333333
+           110                                     10154 */
+
+
+update employees a
+set a.salary = ( select sal  
+				 from --상위부서가 90인 하위 부서의 부서별 직원 평균금액 
+					(select b.department_id, avg(c.salary) as sal 
+					 from departments b, employees c
+					 where b.parent_id = 90 --상위부서 90
+					   and b.department_id = c.department_id
+					 group by b.department_id
+					) d
+				 where a.department_id = d.department_id 
+				 )
+where a.department_id in (select department_id from departments
+						  where parent_id = 90)
+;
+--업데이트 될 대상 건수 확인 :14건 
+select * from employees a 
+where a.department_id in (select department_id from departments
+						  where parent_id = 90) 
+;
+rollback
+
+--위의 update문을 merge 문으로 변환(훨씬 깔끔!)
+MERGE INTO employees a
+using (select b.department_id, avg(c.salary) as sal 
+		 from departments b, employees c
+		 where b.parent_id = 90 --상위부서 90
+		   and b.department_id = c.department_id
+		 group by b.department_id ) d
+on (a.department_id = d.department_id)
+when matched then 
+update set a.salary = d.sal;
+
+
+-------------------------------------------------------------------------------------------------
+--## 인라인 뷰 : from 절에 사용하는 쿼리 (from절에 서브쿼리를 사용해, 하나의 테이블이나 뷰 처럼 사용 = 인라인 뷰)
+select a.employee_id, a.emp_name, b.department_id, b.department_name
+from employees a,
+     departments b, 
+     (select AVG(c.salary) AS avg_salary
+      from departments b, employees c
+      where b.parent_id = 90 --기획부  
+      and b.department_id = c.department_id ) d
+where a.department_id = b.department_id
+and a.salary > d.avg_salary 
+; 
+     
+--또 다른 예 
+select * 
+from sales a, 
+	custormers b,
+	countries c
+where a.sales_month between '200001' and 
 
