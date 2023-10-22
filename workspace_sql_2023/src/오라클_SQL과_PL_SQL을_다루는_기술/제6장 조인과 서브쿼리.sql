@@ -355,9 +355,87 @@ and a.salary > d.avg_salary
 ; 
      
 --또 다른 예 
-select * 
-from sales a, 
-	custormers b,
-	countries c
-where a.sales_month between '200001' and 
+select * from sales 
+;
+select a.* , b.*
+from 
+	(select a.sales_month, round(avg(a.amount_sold)) as month_avg --월평균 판매량 
+	 from sales a, 
+		customers b,
+		countries c
+	 where a.sales_month between '200001' and '200012'
+	   and a.cust_id = b.cust_id
+	   and b.country_id = c.country_id
+	   and c.country_name = 'Italy'
+	 group by a.sales_month
+	) a, 
+	( select round(avg(a.amount_sold)) as year_avg --년평균 매출액  
+	  from sales a, 
+	  	   customers b, 
+	  	   countries c 
+	  where a.sales_month between '200001' and '200012'
+	    and a.cust_id = b.cust_id
+	    and b.country_id = c.country_id
+	    and c.country_name = 'Italy'
+	) b
+where a.month_avg > b.year_avg --연평균 매출액 보다 높은 월 매출액 
+;
 
+
+
+
+/* 복잡한 쿼리를 작성해야할때 어떻게 해야할까? ---> devide & conquer!(분할해서 정복하라) 
+ * 1) 최종적으로 조회되는 결과항목을 정희한다
+ * 2) 필요한 테이블과 컬럼을 파악한다
+ * 3) 작은단위로 분할해서 쿼리를 작성한다
+ * 4) 분할한 단위의 쿼리를 하나로 합쳐 최종결과를 산출한다
+ * 5) 결과를 검증한다
+ * */
+
+--e.g) 연도별로 이탈리아 매출 데이터를 살펴 매출실적이 가장 많은 사원의 목록과 매출액을 구하는 쿼리를 작성해보자 
+select substr(a.sales_month, 1,4) as years
+	 , a.employee_id , (select emp_name from employees where employee_id = a.employee_id) as emp_name 
+	 , sum(a.amount_sold) as amount_sold 
+from sales a
+	, customers b
+	, countries c	
+where a.cust_id = b.cust_id 
+  and b.country_id = c.country_id 
+  and c.country_name = 'Italy'
+group by substr(sales_month, 1,4), a.employee_id 
+;
+
+--연도별 최대/최소 매출 구하기
+select emp.years, emp.employee_id, emp.emp_name, emp.amount_sold, sale.max  
+from (select substr(a.sales_month, 1,4) as years
+			 , a.employee_id , (select emp_name from employees where employee_id = a.employee_id) as emp_name 
+			 , sum(a.amount_sold) as amount_sold 
+		from sales a
+			, customers b
+			, countries c	
+		where a.cust_id = b.cust_id 
+		  and b.country_id = c.country_id 
+		  and c.country_name = 'Italy'
+		group by substr(sales_month, 1,4), a.employee_id 
+	 ) emp
+	,(--연도별 최대/최소 매출 
+		select years, max(amount_sold) as max--, min(amount_sold) as min 
+		from (
+				select substr(a.sales_month, 1,4) as years
+					 , a.employee_id , (select emp_name from employees where employee_id = a.employee_id) as emp_name 
+					 , sum(a.amount_sold) as amount_sold 
+				from sales a
+					, customers b
+					, countries c	
+				where a.cust_id = b.cust_id 
+				  and b.country_id = c.country_id 
+				  and c.country_name = 'Italy'
+				group by substr(sales_month, 1,4), a.employee_id 		
+				) K
+		group by years
+		order by years
+	) sale
+where emp.years = sale.years
+  and emp.amount_sold = sale.max
+order by emp.years
+;
