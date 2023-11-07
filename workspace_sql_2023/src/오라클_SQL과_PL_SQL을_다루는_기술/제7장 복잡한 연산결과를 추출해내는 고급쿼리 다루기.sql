@@ -100,14 +100,19 @@ CONNECT BY NOCYCLE prior department_id = parent_id
 ;
 
 
---# 계층형 쿼리 응용
---1) 샘플데이터 생성 
+
+
+/********************
+--# 계층형 쿼리 응용 #
+********************/
+--# 1) 샘플데이터 생성
+ 
 --예제 데이터 생성시 CONNECT BY 구문을 자주 사용함. 
 --튜닝효과를 위해 다량의 데이터 생성시 계층형쿼리와 오라클에서 제공하는 DBMS_RANDOM이란 패키지(난수생성)을 사용하면 몇만건의 데이터도 쉽게 생성가능. 
 CREATE TABLE ex7_1 AS (
 select ROWNUM seq,
-	   '2014'||LPAD(CEIL(ROWNUM/1000), 2, '0') month, --LPAD(값, 총문자길이, 채움문자)
-	   ROUND(DBMS_RANDOM.VALUE (100, 1000)) amt 	  --DBMS_RANDOM.VALUE(low IN NUMBER, high IN NUMBER) 랜덤한 숫자생성(최소범위,최대범위) 
+	   '2014'||LPAD(CEIL(ROWNUM/1000), 2, '0') month, --★LPAD(값, 총문자길이, 채움문자)
+	   ROUND(DBMS_RANDOM.VALUE (100, 1000)) amt 	  --★DBMS_RANDOM.VALUE(low IN NUMBER, high IN NUMBER) 랜덤한 숫자생성(최소범위,최대범위) 
 	   --,LEVEL
 from dual
 CONNECT BY LEVEL <= 12000
@@ -139,15 +144,66 @@ connect by level <= 3
 --공비 r!= 1 경우
 --a=2 , r=2, n=4
 --2(1-16)/(1-2)  ---> 2*15 = 30 
-select ROWNUM
+select ROWNUM, A.*, LEVEL, SYS_CONNECT_BY_PATH(row_num, '|')
 from (
-		select 1 AS row_num
+		select 1 AS row_num --, LEVEL
 		from dual
 		UNION ALL
-		select 1 AS row_num
+		select 2 AS row_num --, LEVEL
 		from dual 
 		--CONNECT BY LEVEL <= 4
-)
+) A
 CONNECT BY LEVEL <= 4
-
+order by LEVEL, ROW_NUM
 ; 
+
+--test 
+select ROWNUM, A.*, LEVEL, SYS_CONNECT_BY_PATH(row_num, '|')
+from (
+		select 1 AS row_num 
+		from dual
+		UNION ALL
+		select 2 AS row_num 
+		from dual 
+		UNION ALL
+		select 3 AS row_num 
+		from dual 
+) A
+CONNECT BY LEVEL <= 2
+order by LEVEL
+; 
+
+
+---------------------------------
+
+--# 2) 로우를 컬럼으로 변환하기 (LISTAGG)
+--LISTAGG(expr, delimiter) WITHIN GROUP(ORDER BY절) --> expr을 delimiter로 구분해서 로우를 컬럼으로 변환해 조회하는 함수.
+CREATE TABLE ex7_2 AS (
+select --department_id ,
+		LISTAGG(emp_name, ',') WITHIN GROUP (ORDER BY emp_name) as empnames
+from employees
+where department_id is not null
+GROUP BY department_id
+)
+;
+select * from ex7_2 ;
+
+
+--# 3) 컬럼을 로우로 변환하기 (계층형 쿼리 사용)
+select REPLACE(SUBSTR(empnames, start_pos, end_pos - start_pos), ',' , '') as emp_name
+		--SUBSTR(empnames, start_pos, end_pos)
+from ( 
+		select empnames
+			 , LEVEL as lvl
+			 , DECODE(level , 1, 1, INSTR(empnames, ',',1, LEVEL-1)) start_pos
+			 , INSTR(empnames, ',' ,1 ,LEVEL) end_pos
+		from (
+				select empnames || ',' AS empnames
+					  , LENGTH(empnames) ori_len
+					  , LENGTH(REPLACE(empnames, ',', '')) new_len
+				from ex7_2
+				where department_id = '90'
+		)
+		CONNECT BY LEVEL <= ori_len - new_len +1
+)
+;
