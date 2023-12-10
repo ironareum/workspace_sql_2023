@@ -222,6 +222,7 @@ select * from ex7_2 ;
 --# 3) 컬럼을 로우로 변환하기 (계층형 쿼리 사용)
 select REPLACE(SUBSTR(empnames, start_pos, end_pos - start_pos), ',' , '') as emp_name
 		--SUBSTR(empnames, start_pos, end_pos)
+		--INSTR 사용법 : INSTR(컬럼명, '찾을문자', 1:앞에서부터검색, 몇번째 찾은위치)
 from ( 
 		select empnames
 			 , LEVEL as lvl
@@ -237,3 +238,11 @@ from (
 		CONNECT BY LEVEL <= ori_len - new_len +1
 )
 ;
+
+
+
+---------------------------------------------------
+/********************
+ # 02.WITH 절 #
+********************/
+--개선된 서브쿼리 
