@@ -120,16 +120,43 @@ CONNECT BY LEVEL <= 12000
 ;
 
 select month, sum(amt)--* 
-from ex7_1
+from ex7_1 
 group by month
 order by month 
 ;
+
+/* CONNECT BY LEVEL <= 숫자 : 명시한 숫자만큼의 로우를 반환.  
+ * 내부적으로 보면 등비수열의 합만큼 로우를 생성. 
+ * DUAL 테이블은 기본 로우 개수는 1개인데 "SELECT ... FROM DUAL CONNECT BY LEVEL <= 3"이라고 명시할때 이는 첫째항(a=1), 공비(r=1), 항의 수(n=3)인 등비수열에 해당한다.*/
+SELECT * FROM DUAL 
+CONNECT BY LEVEL <= 3 --3 row 리턴 
+;
+
+
+--다음과 같이 서브쿼리로 DUAL테이블을 조회하는 쿼리를 UNION ALL로 연결하면, 맨 바깔에 있는 쿼리의 기본 로우수는 1이 아닌, 2가 된다.
+SELECT ROWNUM, ROW_NUM, LEVEL--, RN
+FROM (SELECT '1_A' ROW_NUM 
+	  FROM DUAL 
+	  UNION ALL
+	  SELECT '1_B' ROW_NUM  
+	  FROM DUAL
+	  )
+CONNECT BY LEVEL <= 4 -- 서브쿼리 2 row^4 
+;
+항수^
+ a^n
+ 2^1, 2^2, 2^3, 2^4 
+= 2  + 4  + 8 + 16 
 
 /* 등비수열 합(S)공식
  * 등비수열이란 : 첫째항부터 차례대로 일정한 수(=공비)를 곱하여 만든 수열
  * 공비r = 1이면, S = a*n
  * 공비r!= 1이면, S = a(1-r^n)/(1-r)
- */
+      r = 2  , S = 2(1-2^4)/(1-2)
+                 = 2(1-16)/-1
+                 = 2(-15)/-1
+                 = 30  
+ **/
 --공비 r = 1 경우 
 --a=1, r=1, n=3 
 --1*3 = 3
@@ -172,6 +199,9 @@ from (
 CONNECT BY LEVEL <= 2
 order by LEVEL
 ; 
+ a^n
+ 3^1, 3^2--, 2^3, 2^4 
+= 3  + 9 -- + 8 + 16 
 
 
 ---------------------------------
