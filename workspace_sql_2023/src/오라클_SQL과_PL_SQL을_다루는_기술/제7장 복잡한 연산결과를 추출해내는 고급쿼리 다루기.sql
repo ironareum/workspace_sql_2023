@@ -246,3 +246,40 @@ from (
  # 02.WITH 절 #
 ********************/
 --개선된 서브쿼리 
+
+/* 연도별 최종월 기준 가장 대출이 많은 도시와 잔액을 구하라. (도시별 합계필요?) */
+--my 쿼리 
+WITH B AS (
+	--연도+도시별 대출 합계
+	select PERIOD, REGION, SUM(LOAN_JAN_AMT) SUM_LOAN_JAN_AMT	 
+	from kor_loan_status 
+	group by PERIOD, REGION
+	order by PERIOD 
+)
+, A AS (
+	--연도별 최종월
+	select B.PERIOD, MAX(B.SUM_LOAN_JAN_AMT)
+	from B 
+	  , (select MAX(PERIOD) MAX_PERIOD	
+ 		 from kor_loan_status a
+		 group by SUBSTR(PERIOD,1,4)) aa
+    where B.PERIOD = aa.MAX_PERIOD
+    group by B.PERIOD 
+)
+select * from A ;
+--select R1.PERIOD, R1.REGION, MAX(R1.LOAN_JAN_AMT)
+--from kor_loan_status R1, A, B
+--where A.MAX_PERIOD = B.PERIOD 
+--  and B.SUM_LOAN_JAN_AMT = MAX(SUM_LOAN_JAN_AMT)
+--  and R1.REGION = B.REGION
+--group by R1.PERIOD , R1.REGION 
+----select * from B ;
+
+select T1.* , ( select REGION from kor_loan_status a where T1.PERIOD = a.PERIOD and T1.LOAN_JAN_AMT = a.LOAN_JAN_AMT) AS REDION    
+from T1  
+;
+
+select * from kor_loan_status
+where PERIOD = '201311'
+order by REGION
+;
