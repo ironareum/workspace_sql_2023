@@ -217,10 +217,12 @@ where department_id is not null
 GROUP BY department_id
 )
 ;
-select * from ex7_2 ;
+select * from employees ;
 
-select LISTAGG(emp_name,', ') WITHIN GROUP(ORDER BY emp_name) --* 
-from employees; 
+select manager_id, LISTAGG(emp_name,', ') WITHIN GROUP(ORDER BY emp_name) as names 
+from employees
+group by manager_id
+; 
 
 
 --# 3) 컬럼을 로우로 변환하기 (계층형 쿼리 사용)
@@ -251,39 +253,53 @@ from (
 ********************/
 --개선된 서브쿼리 
 
-/* 연도별 최종월 기준 가장 대출이 많은 도시와 잔액을 구하라. (도시별 합계필요?) */
---my 쿼리 
-WITH B AS (
-	--연도+도시별 대출 합계
-	select PERIOD, REGION, SUM(LOAN_JAN_AMT) SUM_LOAN_JAN_AMT	 
-	from kor_loan_status 
-	group by PERIOD, REGION
-	order by PERIOD 
+/* 연도별 최종월 기준 가장 대출이 많은 도시와 잔액을 구하라. (합계) 
+ * 1) 연도별 최종월 구하기 (max)
+ * 2) 연도별 최동월 도시의 대출합계 구하기
+ * 3)   
+ * */
+with t1 as 
+( --연도별 최종월
+  select max(period) as max_year
+    from kor_loan_status
+  group by substr(period,1,4)
 )
-, A AS (
-	--연도별 최종월
-	select B.PERIOD, MAX(B.SUM_LOAN_JAN_AMT)
-	from B 
-	  , (select MAX(PERIOD) MAX_PERIOD	
- 		 from kor_loan_status a
-		 group by SUBSTR(PERIOD,1,4)) aa
-    where B.PERIOD = aa.MAX_PERIOD
-    group by B.PERIOD 
+, t2 as 
+( --연도별 최종월 도시별 잔액 
+  select t1.max_year, region, sum(loan_jan_amt) as sum_loan 
+    from kor_loan_status aa, t1
+   where aa.period = t1.max_year
+  group by max_year, region
 )
-select * from A ;
---select R1.PERIOD, R1.REGION, MAX(R1.LOAN_JAN_AMT)
---from kor_loan_status R1, A, B
---where A.MAX_PERIOD = B.PERIOD 
---  and B.SUM_LOAN_JAN_AMT = MAX(SUM_LOAN_JAN_AMT)
---  and R1.REGION = B.REGION
---group by R1.PERIOD , R1.REGION 
-----select * from B ;
+select  *
+from t2 
+where (max_year,sum_loan) IN (select max_year, max(sum_loan) from t2 group by max_year)
+order by 1
+; 
+ 201112   서울     334728.3
+ 201212   서울     331572.3
+ 201311   서울     334062.7
 
-select T1.* , ( select REGION from kor_loan_status a where T1.PERIOD = a.PERIOD and T1.LOAN_JAN_AMT = a.LOAN_JAN_AMT) AS REDION    
-from T1  
-;
+-----------------------------------
+--[책에 있는 쿼리]
+ 201112 서울     334728.3
+ 201212 서울     331572.3
+ 201311 서울     334062.7
 
-select * from kor_loan_status
-where PERIOD = '201311'
-order by REGION
-;
+with b2 as (select period, region, sum(loan_jan_amt) jan_amt
+ 			from kor_loan_status
+ 			group by period, region
+		   ),
+	 c as (select b2.period, max(b2.jan_amt) max_jan_amt
+	 	   from b2, (select max(period) max_month
+	 	   			 from kor_loan_status
+	 	   			 group by substr(period,1,4)
+	 	   			 )a
+	 	   where b2.period = a.max_month
+	 	   group by b2.period
+		  )
+select b2.*
+from b2, c
+where b2.period = c.period
+and b2.jan_amt = c.max_jan_amt
+order by 1;
