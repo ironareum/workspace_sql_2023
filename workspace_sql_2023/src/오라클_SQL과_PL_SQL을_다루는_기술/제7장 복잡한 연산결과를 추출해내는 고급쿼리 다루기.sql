@@ -208,6 +208,7 @@ order by LEVEL
 
 --# 2) 로우를 컬럼으로 변환하기 (LISTAGG)
 --LISTAGG(expr, delimiter) WITHIN GROUP(ORDER BY절) --> expr을 delimiter로 구분해서 로우를 컬럼으로 변환해 조회하는 함수.
+--LISTAGG는 그룹함수이기 떄문에, GROUP BY 또는 PARTITION BY절과 함께 사용한다. 
 CREATE TABLE ex7_2 AS (
 select --department_id ,
 		LISTAGG(emp_name, ',') WITHIN GROUP (ORDER BY emp_name) as empnames
@@ -217,6 +218,9 @@ GROUP BY department_id
 )
 ;
 select * from ex7_2 ;
+
+select LISTAGG(emp_name,', ') WITHIN GROUP(ORDER BY emp_name) --* 
+from employees; 
 
 
 --# 3) 컬럼을 로우로 변환하기 (계층형 쿼리 사용)
