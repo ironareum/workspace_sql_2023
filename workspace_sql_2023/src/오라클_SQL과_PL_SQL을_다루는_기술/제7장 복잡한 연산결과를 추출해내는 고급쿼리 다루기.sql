@@ -5,7 +5,10 @@
  * 4. 다중테이블 INSERT 
  */
 
---## 1. 계층형 쿼리
+/****************** 
+ ## 1. 계층형 쿼리 ##
+ ******************/
+
 /* 계층형쿼리란, 2차원 형태의 테이블에 저장된 데이터를 계층형 구조로 결과를 반환하는 쿼리를 말한다. (=상하수직관계의 구조) 
  * 
  * 계층쿼리 사용법 : SELECT expr1, expr2 ..
@@ -303,3 +306,109 @@ from b2, c
 where b2.period = c.period
 and b2.jan_amt = c.max_jan_amt
 order by 1;
+
+
+
+
+
+--## 순환서브쿼리 (like 계층형 쿼리)
+/* Recursive WITH절 사용법 : 
+ * UNION ALL을 가지고 초기값을 정해주는 초기서브쿼리와 , 
+ * 이후에 행위를 작성하는 Recursive 서브 쿼리로 나뉜다. 
+ * 단, 항상 재귀함수에서 그래듯이 무한루프에 빠지지않도록 종료조건을 조건절로 표현해야함!★
+ * */
+/*----------[Recursive WITH절 사용법] START------------*/
+WITH CONTINUOUS(NUM, RESULT) AS(
+    SELECT 1,1 FROM DUAL --초기값을 정해주는 서브쿼리 
+    UNION ALL
+    SELECT --이후에 행위를 작성하는 Recursive 서브쿼리 
+          NUM+1, (NUM+1)+RESULT
+    FROM CONTINUOUS
+    WHERE NUM < 9 --무한루프에 빠지지않도록 하는 조건절! 
+)
+SELECT
+    NUM
+    ,RESULT
+FROM CONTINUOUS;
+/*----------[Recursive WITH절 사용법] E N D------------*/
+
+select * from departments order by parent_id;
+--1) 계층형 쿼리란
+select parent_id, department_id, LPAD(' ', 3*(LEVEL-1))||department_name, LEVEL 
+from departments
+start with parent_id is null
+connect by prior department_id = parent_id;
+
+--2) with절을 사용해 위 계층형 쿼리와 동일한 결과를 뽑아낼수있다.
+with recur(parent_id, department_id, department_name, lvl)
+	 as ( select parent_id, department_id, department_name, 1 as lvl  --초기값 서브쿼리 
+	 		from departments
+	 	   where parent_id is null --> start with parent_id is null 과 같음
+	 	   union all 
+	 	  select a.parent_id, a.department_id, a.department_name, b.lvl +1
+	 	  	from departments a, recur b
+	 	   where a.parent_id = b.department_id --> connect by prior department_id = parent_id와 같음
+	 	)
+select parent_id, department_id, LPAD(' ', 3*(lvl-1)) || department_name as department_name, lvl
+from recur; 
+
+--3) recursive with절에서 order by 사용하기 
+/* 계층형 쿼리에서는 자동으로 레벨에 따라 계층별로 조회되었지만, 
+ * 순환서브쿼리에서는 단순히 레벨순으로만 조회되므로 
+ * order siblings by 절과 같은 기능이 필요함! ---> SEARCH 구문 사용하기!!  
+ * 
+ * [SEARCH 구문 용법]
+ *  -DEPTH FITST BY   : 같은 노드에 있는 로우, 즉 형제(siblings) row 보다 자식 row가 먼저 조회됨.
+ *  -BREADTH FIRST BY : 자식로우보다 형제로우가 먼저 조회됨.
+ *  -같은 레벨에 있는 형제로우일때는 BY 다음에 명시한 컬럼 순으로 조회됨. 
+ *  -SET 다음에는 가상 컬럼 형태로 최종 SELECT 절에서 사용할 수 있다.
+ */
+with recur(parent_id, department_id, department_name, lvl)
+	 as ( select parent_id, department_id, department_name, 1 as lvl  --초기값 서브쿼리 
+	 		from departments
+	 	   where parent_id is null --> start with parent_id is null 과 같음
+	 	   union all 
+	 	  select a.parent_id, a.department_id, a.department_name, b.lvl +1
+	 	  	from departments a, recur b
+	 	   where a.parent_id = b.department_id --> connect by prior department_id = parent_id와 같음
+	 	)
+	 	/* order by와 같음 */
+	 	SEARCH DEPTH FIRST BY department_id SET order_seq -->자식로우 먼저 조회, 같은 레벨에서는 department_id순으로, order_seq 은 가상컬럼형태로 최종 select 절에서만 사용할수있음. 	 		
+--select * from recur; 
+--최종 조회 쿼리
+select parent_id, department_id, LPAD(' ', 3*(lvl-1)) || department_name as department_name, lvl, order_seq 
+from recur; 
+
+
+--4) 
+with recur(parent_id, department_id, department_name, lvl)
+	 as ( select parent_id, department_id, department_name, 1 as lvl  --초기값 서브쿼리 
+	 		from departments
+	 	   where parent_id is null --> start with parent_id is null 과 같음
+	 	   union all 
+	 	  select a.parent_id, a.department_id, a.department_name, b.lvl +1
+	 	  	from departments a, recur b
+	 	   where a.parent_id = b.department_id --> connect by prior department_id = parent_id와 같음
+	 	)
+	 	/* order by와 같음 */
+	 	SEARCH BREADTH FIRST BY parent_id SET order_seq -->형제로우 먼저 조회, 같은 레벨에서는 parents_id순으로, order_seq 은 가상컬럼형태로 최종 select 절에서만 사용할수있음. 	 		
+--최종 조회 쿼리
+select parent_id, department_id, LPAD(' ', 3*(lvl-1)) || department_name as  department_name, lvl, order_seq 
+from recur; 
+
+
+
+
+
+/****************************** 
+ ## 2. 분석함수와 window 함수 ##
+ ******************************/
+
+/* 분석함수 */
+/* 분석함수란 테이블에 있는 로우에 대해 특정 그룹별로 집계 값을 산출할때 사용.
+ * 집계값을 구할때 보통은 그룹쿼리를 사용하는데, 이때 GROUP BY 절에 의해 최종쿼리 결과는 그룹별로 로우수가 줄어든다. 
+ * 이에반해, 집계함수를 사용하면 로우의 손실없이도 그룹별 집계값을 산출해 낼 수 있다.
+ * 
+ * 분석함수에서 사용하는 로우별 그룹을 ★윈도우(window)라고 부르는데, 이는 집계 값 계산을 위한 로우의 범위를 결정하는 역할★을 한다.   
+ * */
+
